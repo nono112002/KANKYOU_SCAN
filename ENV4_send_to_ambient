@@ -1,0 +1,72 @@
+#include <M5Stack.h>
+#include "Adafruit_SHT4x.h"
+#include <Ambient.h>
+#include <WiFi.h>
+
+//#define BUTTON_PIN 41
+
+unsigned int channelId = 79031;
+const char* writeKey = "c9c0d6e8a006c80b";
+const char* ssid = "tokuitenwifi"; // WiFi SSIDをここに入力
+const char* password = "tt2023wfp116"; // WiFiパスワードをここに入力
+
+WiFiClient client;
+Ambient ambient;
+
+Adafruit_SHT4x sht4 = Adafruit_SHT4x();
+
+
+void setup() {
+  M5.begin();
+  Serial.begin(115200);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    M5.Lcd.print("_");
+  }
+  if (ambient.begin(channelId, writeKey, &client)) {
+    M5.Lcd.println("Ambient connected successfully");
+  } else {
+    M5.Lcd.println("Failed to connect Ambient");
+  }
+  while (!Serial) delay(10);
+  Wire.begin(21, 22);  // I2Cのピン指定
+  if (!sht4.begin()) {
+    while (1) delay(1);
+  }
+  sht4.setPrecision(SHT4X_HIGH_PRECISION);
+  sht4.setHeater(SHT4X_NO_HEATER);
+}
+void loop() {
+  sensors_event_t humidity, temp;
+  sht4.getEvent(&humidity, &temp);
+
+  // AtomS3の画面にデータを表示
+  M5.Lcd.fillScreen(BLACK);
+  M5.Lcd.setCursor(0, 0);
+  M5.Lcd.setTextSize(3);
+  M5.Lcd.print(temp.temperature);
+  M5.Lcd.println(" C");
+  M5.Lcd.print(humidity.relative_humidity);
+  M5.Lcd.println(" %");
+  //Ambient用に型を宣言
+  float tempfloat = temp.temperature;
+  float humifloat = humidity.relative_humidity;
+  send_to_Ambient(tempfloat,humifloat); 
+
+  delay(1000*30);
+}
+
+
+void send_to_Ambient(float tempfloat,float humifloat){
+  ambient.set(1, tempfloat);
+  ambient.set(2, humifloat);
+  bool sendResult = ambient.send();
+  Serial.print("Temperature: "); Serial.print(tempfloat); Serial.println(" degrees C");
+  Serial.print("Humidity: "); Serial.print(humifloat); Serial.println("% rH");
+  if (sendResult) {
+    M5.Lcd.println("Data sent successfully");
+  } else {
+    M5.Lcd.println("Failed to send data");
+  }
+}
